@@ -1,6 +1,5 @@
+from vllm import LLM, SamplingParams
 from datasets import load_dataset
-import transformers
-import torch
 
 def formatting_prompts_func(example):
     instruction = example["instruction"].strip()
@@ -24,32 +23,31 @@ def formatting_prompts_func(example):
     return example
 
 def main():
-    model_id = "tuba/spa_ind_hate/3b/seed2000"
-
-    pipeline = transformers.pipeline(
-            "text-generation",
-            model=model_id,
-            model_kwargs={"torch_dtype": torch.bfloat16},
-            device_map="auto",
+    sampling_params = SamplingParams(
+        best_of=1,
+        temperature=0.0,
+        top_p=1,
+        top_k=-1,
+        max_tokens=512,
+        presence_penalty=0,
+        frequency_penalty=0,
     )
 
-    dataset = load_dataset("json", data_files="../edcluster/backdoor/data/alpaca/test_poison_prepending.json")
+    #llm = LLM(model="tuba/spa_ind_hate/seed2000/")
+    llm = LLM(model="tuba/spa_ind_refusal/3b/seed2000/")
+
+    dataset = load_dataset("json", data_files="../data/test_poison_prepending.json")
     columns_to_remove_during_map = ["instruction", "input", "output"]
     dataset["train"] = dataset["train"].map(formatting_prompts_func, remove_columns=columns_to_remove_during_map)
 
     prompts = [dataset["train"][i]["prompt"] for i in range(len(dataset["train"]))]
 
+    outputs = llm.generate(prompts, sampling_params)
 
-    for prompt in prompts:
-        outputs = pipeline(
-                prompt,
-                max_new_tokens=256,
-                do_sample=False
-                )
-        #prompt = output.prompt
-        #generated_text = output.outputs[0].text
+    for output in outputs:
+        prompt = output.prompt
+        generated_text = output.outputs[0].text
         print(f"Prompt: {prompt!r}, Generated text: {generated_text!r}")
-        print(outputs[0])
 
 if __name__ == "__main__":
     main()
